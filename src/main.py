@@ -1251,7 +1251,7 @@ playlist_cmds = ['p', 'pa', 'pw']
 available_cmds = ['start', 'ping', 'donate', 'settings', 'a', 'w', 'c', 's', 't', 'm', 'z'] + playlist_cmds
 
 TG_MAX_FILE_SIZE = 2000 * 1024 * 1024
-TG_MAX_PARALLEL_CONNECTIONS = 30
+TG_MAX_PARALLEL_CONNECTIONS = 20
 TG_CONNECTIONS_COUNT = 0
 MAX_STORAGE_SIZE = int(os.getenv('STORAGE_SIZE', 0)) * 1024 * 1024
 STORAGE_SIZE = MAX_STORAGE_SIZE
