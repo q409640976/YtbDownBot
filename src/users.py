@@ -26,7 +26,7 @@ class User:
     async def init(id, username=None,is_group=False, force_create=False):
         user = User()
         user_id = ('user' if not is_group else 'chat') + str(id)
-        user_settings = await get_user_no_read(id)
+        user_settings = await get_user_no_read(user_id)
         if user_settings is not None and not force_create:
             user.settings = user_settings
             # change = await get_changes(user.settings['_id'])
@@ -114,9 +114,10 @@ async def get_user_no_read(id):
     except HTTPError:
         return None
     try:
-        ch_dict = next(ch_feed)
-        doc = Document(db, ch_dict['doc']['_id'])
-        doc.update(ch_dict['doc'])
+        if '_deleted' in ch_feed['doc'] and ch_feed['doc']['_deleted']:
+            return None
+        doc = Document(db, ch_feed['doc']['_id'])
+        doc.update(ch_feed['doc'])
         return doc
     except:
         return None
