@@ -169,11 +169,14 @@ async def task_timeout_cancel(task, timemout=5):
 async def _on_message_task(message):
     try:
         # async with bot.action(message['chat']['id'], 'file'):
-        chat_id = message['from']['id']
+        chat_id = message['chat']['id']
         msg_id = message['message_id']
+        is_group = False
+        if message['chat']['type'] != 'private':
+            is_group = True
         log = new_logger(chat_id, msg_id)
         try:
-            await _on_message(message, log)
+            await _on_message(message, log, is_group)
         except HTTPError as e:
             # crashing to try change ip
             # otherwise youtube.com will not allow us
@@ -183,7 +186,8 @@ async def _on_message_task(message):
                 await shutdown()
             else:
                 log.exception(e)
-                await client.send_message(chat_id, e.__str__(), reply_to=msg_id)
+                if not is_group:
+                    await client.send_message(chat_id, e.__str__(), reply_to=msg_id)
         except youtube_dl.DownloadError as e:
             # crashing to try change ip
             # otherwise youtube.com will not allow us
@@ -194,14 +198,16 @@ async def _on_message_task(message):
                     await shutdown()
 
             log.exception(e)
-            await client.send_message(chat_id, str(e), reply_to=msg_id)
+            if not is_group:
+                await client.send_message(chat_id, str(e), reply_to=msg_id)
         except Exception as e:
             log.exception(e)
             if 'ERROR' not in str(e):
                 err_msg = 'ERROR: ' + str(e)
             else:
                 err_msg = str(e)
-            await client.send_message(chat_id, err_msg, reply_to=msg_id)
+            if not is_group:
+                await client.send_message(chat_id, err_msg, reply_to=msg_id)
     except Exception as e:
         logging.error(e)
 
@@ -297,13 +303,13 @@ def normalize_url_path(url):
     return urlunparse(parsed)
 
 
-def youtube_to_invidio(url, audio=False):
+def youtube_to_invidio(url, audio=False, quality='dash'):
     u = None
     if is_ytb_link_re.search(url):
         ytb_id_match = get_ytb_id_re.search(url)
         if ytb_id_match:
             ytb_id = ytb_id_match.groups()[-1]
-            u = "https://invidio.us/watch?v=" + ytb_id + "&quality=dash"
+            u = "https://invidio.us/watch?v=" + ytb_id + f"&quality={quality}"
             if audio:
                 u += '&listen=1'
     return u
@@ -328,7 +334,7 @@ async def upload_multipart_zip(source, name, file_size, chat_id, msg_id):
             uploaded_file = await client.upload_file(file, file_size=file.size, file_name=file.name)
         for i in range(3):
             try:
-                await client.send_file(chat_id, uploaded_file)
+                await client.send_file(chat_id, uploaded_file, reply_to=msg_id)
             except Exception as e:
                 if i >= 2:
                     raise e
@@ -362,7 +368,7 @@ async def upload_multipart_zip(source, name, file_size, chat_id, msg_id):
 #     return invid_urls
 
 
-async def _on_message(message, log):
+async def _on_message(message, log, is_group):
     global STORAGE_SIZE
     if message['from']['is_bot']:
         log.info('Message from bot, skip')
@@ -371,7 +377,8 @@ async def _on_message(message, log):
     msg_id = message['message_id']
     chat_id = message['chat']['id']
     if 'text' not in message:
-        await client.send_message(chat_id, 'Please send me a video link', reply_to=msg_id)
+        if not is_group:
+            await client.send_message(chat_id, 'Please send me a video link', reply_to=msg_id)
         return
     msg_txt = message['text']
 
@@ -409,13 +416,23 @@ async def _on_message(message, log):
             await client.send_message(chat_id, 'pong')
             return
         elif cmd == 'settings':
-            user = await users.User.init(chat_id)
+            if is_group:
+                await client.send_message(chat_id,
+                                          'Command not available in chats',
+                                          reply_to=msg_id)
+                return
+            user = await users.User.init(chat_id, is_group=is_group)
             await send_settings(user, chat_id)
             return
         elif cmd == 'donate':
             await client.send_message(chat_id, os.getenv('DONATE_INFO', ''), parse_mode='markdown')
             return
         elif cmd in playlist_cmds:
+            if is_group:
+                await client.send_message(chat_id,
+                                          'Command not available in chats',
+                                          reply_to=msg_id)
+                return
             user = await users.User.init(chat_id)
             if not user.donator:
                 await client.send_message(chat_id,
@@ -497,12 +514,13 @@ async def _on_message(message, log):
                                     reply_to=msg_id,
                                     parse_mode='markdown')
         else:
-            await client.send_message(chat_id, 'Please send me link to the video', reply_to=msg_id)
+            if not is_group:
+                await client.send_message(chat_id, 'Please send me link to the video', reply_to=msg_id)
         log.info('Message without url: ' + msg_txt)
         return
 
     if user is None:
-        user = await users.User.init(chat_id)
+        user = await users.User.init(chat_id, is_group=is_group)
     if user.default_media_type == users.DefaultMediaType.Audio.value:
         audio_mode = True
 
@@ -526,13 +544,15 @@ async def _on_message(message, log):
 
     # if len(urls) == 1 and 'youtube.com/playlist?list=' in urls[0] and playlist_start is not None:
     #     urls = await ytb_playlist_to_invidious(urls[0], (playlist_start,playlist_end))
-    async with client.action(chat_id, "file"):
+    if not is_group:
+        action = await client.action(chat_id, "file").__aenter__()
+    try:
         urls = set(urls)
         for iu, u in enumerate(urls):
             vinfo = None
             params = {'noplaylist': True,
                       'youtube_include_dash_manifest': False,
-                      'quiet': True,
+                      'is_group': True,
                       'no_color': True,
                       'nocheckcertificate': True
                       # 'force_generic_extractor': True if 'invidio.us/watch' in u else False
@@ -559,6 +579,10 @@ async def _on_message(message, log):
                     if vinfo is None:
                         for _ in range(2):
                             try:
+                                if is_group and ('youtube.com' in u or 'youtu.be' in u):
+                                    invid_url = youtube_to_invidio(u, audio_mode == True, quality='hd720')
+                                    u = invid_url
+                                    ydl.params['force_generic_extractor'] = True
                                 vinfo = await extract_url_info(ydl, u)
                                 if vinfo.get('age_limit') == 18 and is_ytb_link_re.search(vinfo.get('webpage_url', '')):
                                     raise youtube_dl.DownloadError('youtube age limit')
@@ -599,11 +623,13 @@ async def _on_message(message, log):
                                 vinfo = await extract_url_info(ydl, u)
                             except Exception as e:
                                 log.error(e)
-                                await client.send_message(chat_id, str(e), reply_to=msg_id)
+                                if not is_group:
+                                    await client.send_message(chat_id, str(e), reply_to=msg_id)
                                 continue
                         else:
                             log.error(e)
-                            await client.send_message(chat_id, str(e), reply_to=msg_id)
+                            if not is_group:
+                                await client.send_message(chat_id, str(e), reply_to=msg_id)
                             continue
                     elif 'are video-only' in str(e):
                         params['format'] = 'bestvideo[ext=mp4]'
@@ -612,12 +638,14 @@ async def _on_message(message, log):
                             vinfo = await extract_url_info(ydl, u)
                         except Exception as e:
                             log.error(e)
-                            await client.send_message(chat_id, str(e), reply_to=msg_id)
+                            if not is_group:
+                                await client.send_message(chat_id, str(e), reply_to=msg_id)
                             continue
                     else:
                         if iu < len(urls) - 1:
                             log.error(e)
-                            await client.send_message(chat_id, str(e), reply_to=msg_id)
+                            if not is_group:
+                                await client.send_message(chat_id, str(e), reply_to=msg_id)
                             break
 
                         raise
@@ -631,7 +659,8 @@ async def _on_message(message, log):
                 for ie, entry in enumerate(entries):
                     if entry is None:
                         try:
-                            await client.send_message(chat_id, f'WARN: #{params["playliststart"] + ie} was skipped due to error', reply_to=msg_id)
+                            if not is_group:
+                                await client.send_message(chat_id, f'WARN: #{params["playliststart"] + ie} was skipped due to error', reply_to=msg_id)
                         except:
                             pass
                         continue
@@ -665,7 +694,7 @@ async def _on_message(message, log):
                     if cmd == 't':
                         thumb_url = entry.get('thumbnail')
                         if thumb_url:
-                            await client.send_file(chat_id, thumb_url)
+                            await client.send_file(chat_id, thumb_url, reply_to=msg_id if not is_group else None)
                         else:
                             await client.send_message(chat_id, 'Media don\'t contain thumbnail')
 
@@ -860,34 +889,42 @@ async def _on_message(message, log):
                                     log.info('too big file ' + str(_file_size))
                                     if 'http' in entry.get('protocol', '') and 'unknown' in entry.get('format', '') and entry.get('ext', '') not in ['unknown_video', 'mp3', 'mp4', 'm4a', 'ogg', 'mkv', 'flv', 'avi', 'webm']:
                                         if not user.donator:
-                                            await client.send_message(chat_id,
-                                                                    f'File bigger than <b>{sizeof_fmt(TG_MAX_FILE_SIZE)}</b>\n' +
-                                                                    'Only <b>donators</b> can download files above this limit\n' +
-                                                                    'Donate to me at least <b>5$</b> to use this feature\n'
-                                                                    'Send /donate command to get info\n'
-                                                                    'Notify @pony0boy after donation',
-                                                                    reply_to=msg_id,
-                                                                    parse_mode='html')
+                                            if not is_group:
+                                                await client.send_message(chat_id,
+                                                                        f'File bigger than <b>{sizeof_fmt(TG_MAX_FILE_SIZE)}</b>\n' +
+                                                                        'Only <b>donators</b> can download files above this limit\n' +
+                                                                        'Donate to me at least <b>5$</b> to use this feature\n'
+                                                                        'Send /donate command to get info\n'
+                                                                        'Notify @pony0boy after donation',
+                                                                        reply_to=msg_id,
+                                                                        parse_mode='html')
                                             return
                                         source = await av_source.URLav.create(entry.get('url'), http_headers)
                                         await upload_multipart_zip(source, entry['title']+'.'+entry['ext'], _file_size, chat_id, msg_id)
                                     else:
-                                        await client.send_message(chat_id,
-                                                                f'ERROR: Too big media file size <b>{sizeof_fmt(_file_size)}</b>,\n'
-                                                                f'Telegram allow only up to <b>{sizeof_fmt(TG_MAX_FILE_SIZE)}</b>\n'
-                                                                'you can try cut it by command like:\n <code>/c 0-10:00 ' + u + '</code>',
-                                                                reply_to=msg_id,
-                                                                parse_mode="html")
+                                        if not is_group:
+                                            await client.send_message(chat_id,
+                                                                    f'ERROR: Too big media file size <b>{sizeof_fmt(_file_size)}</b>,\n'
+                                                                    f'Telegram allow only up to <b>{sizeof_fmt(TG_MAX_FILE_SIZE)}</b>\n'
+                                                                    'you can try cut it by command like:\n <code>/c 0-10:00 ' + u + '</code>',
+                                                                    reply_to=msg_id,
+                                                                    parse_mode="html")
                                 else:
                                     log.info('failed find suitable media format')
-                                    await client.send_message(chat_id, "ERROR: Failed find suitable media format",
-                                                            reply_to=msg_id)
+                                    if not is_group:
+                                        await client.send_message(chat_id, "ERROR: Failed find suitable media format",
+                                                                reply_to=msg_id)
                                 # await bot.send_message(chat_id, "ERROR: Failed find suitable video format", reply_to=msg_id)
                                 return
                             # if 'playlist' in entry and entry['playlist'] is not None:
                             recover_playlist_index = ie
                             break
                         if cmd == 'z':
+                            if is_group:
+                                await client.send_message(chat_id,
+                                                          'Command not available in chats',
+                                                          reply_to=msg_id)
+                                return
                             if not user.donator:
                                 await client.send_message(chat_id,
                                                         'Only <b>donators</b> can use multipart archiving\n' +
@@ -1122,7 +1159,8 @@ async def _on_message(message, log):
                                                                 file_size=file_size,
                                                                 http_headers=http_headers)
                         except AuthKeyDuplicatedError as e:
-                            await client.send_message(chat_id, 'INTERNAL ERROR: try again')
+                            if not is_group:
+                                await client.send_message(chat_id, 'INTERNAL ERROR: try again')
                             log.fatal(e)
                             os.abort()
                         except ConnectionError as e:
@@ -1181,6 +1219,9 @@ async def _on_message(message, log):
                                                     (((user.default_media_type == users.DefaultMediaType.Audio.value) or
                                                       (audio_mode == True))
                                                      and user.audio_caption) else ''
+                        if is_group:
+                            chat_username = message['chat']['username']
+                            caption = '['+caption+']' + f'(https://t.me/{chat_username}/{msg_id})'
                         recover_playlist_index = None
                         _thumb = None
                         try:
@@ -1197,9 +1238,11 @@ async def _on_message(message, log):
                                                        caption=caption,
                                                        force_document=force_document,
                                                        supports_streaming=False if ffmpeg_av is not None else True,
-                                                       thumb=_thumb)
+                                                       thumb=_thumb,
+                                                       reply_to=msg_id if not is_group else None)
                             except AuthKeyDuplicatedError as e:
-                                await client.send_message(chat_id, 'INTERNAL ERROR: try again')
+                                if not is_group:
+                                    await client.send_message(chat_id, 'INTERNAL ERROR: try again')
                                 log.fatal(e)
                                 os.abort()
                             except Exception as e:
@@ -1211,7 +1254,8 @@ async def _on_message(message, log):
 
                             break
                     except AuthKeyDuplicatedError as e:
-                        await client.send_message(chat_id, 'INTERNAL ERROR: try again')
+                        if not is_group:
+                            await client.send_message(chat_id, 'INTERNAL ERROR: try again')
                         log.fatal(e)
                         os.abort()
                     except Exception as e:
@@ -1224,6 +1268,10 @@ async def _on_message(message, log):
 
                 if recover_playlist_index is None:
                     break
+    finally:
+        if not is_group:
+            await action.__aexit__()
+
 
 
 # api_id = int(os.environ['API_ID'])
@@ -1273,8 +1321,8 @@ def sig_handler():
 if __name__ == '__main__':
     print('Allowed storage size: ', STORAGE_SIZE)
     app = web.Application()
-    app.add_routes([web.post('/bot', on_message)])
     client.start()
+    app.add_routes([web.post('/bot', on_message)])
     # asyncio.get_event_loop().create_task(bot._run_until_disconnected())
     asyncio.get_event_loop().add_signal_handler(signal.SIGABRT, sig_handler)
     asyncio.get_event_loop().add_signal_handler(signal.SIGTERM, sig_handler)

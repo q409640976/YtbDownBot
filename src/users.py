@@ -1,5 +1,7 @@
 from cloudant.adapters import Replay429Adapter
 from cloudant.client import Cloudant
+from cloudant.document import Document
+from requests.exceptions import HTTPError
 import os
 import asyncio
 from enum import Enum
@@ -21,27 +23,27 @@ class User:
         self.settings = None
 
     @staticmethod
-    async def init(id, force_create=False):
+    async def init(id, is_group=False, force_create=False):
         user = User()
-        user_settings = await get_user(id)
+        user_id = ('user' if not is_group else 'chat') + str(id)
+        user_settings = await get_user_no_read(id)
         if user_settings is not None and not force_create:
             user.settings = user_settings
-            change = await get_changes(user.settings['_id'])
-            if change['changes'][-1]['rev'] != user.settings['_rev']:
-                # update doc from _changes request to eliminate reading operation
-                user.settings.update(change['doc'])
-                # await user.sync_with_db()
+            # change = await get_changes(user.settings['_id'])
+            # if change['changes'][-1]['rev'] != user.settings['_rev']:
+            #     # update doc from _changes request to eliminate reading operation
+            #     user.settings.update(change['doc'])
+            #     # await user.sync_with_db()
             if user.banned:
                 raise Exception('You are BANNED!')
             return user
 
-        user_id = 'user' + str(id)
         user_settings = {
             '_id': user_id,
             'default_media_type': DefaultMediaType.Video.value,
             'video_format': VideoFormat.MED.value,
-            'audio_caption': False,
-            'video_caption': False
+            'audio_caption': False if not is_group else True,
+            'video_caption': False if not is_group else True
         }
         user_settings = await create_user(user_settings)
         user.settings = user_settings
@@ -103,6 +105,19 @@ client = Cloudant(os.environ['CLOUDANT_USERNAME'],
                   connect=True)
 db = client['ytbdownbot']
 
+
+async def get_user_no_read(id):
+    try:
+        ch_feed = await get_changes(id)
+    except HTTPError:
+        return None
+    try:
+        ch_dict = next(ch_feed)
+        doc = Document(db, ch_dict['doc']['_id'])
+        doc.update(ch_dict['doc'])
+        return doc
+    except:
+        return None
 
 async def get_user(id):
     return await asyncio.get_event_loop().run_in_executor(None, _get_user, id)
