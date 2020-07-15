@@ -520,7 +520,11 @@ async def _on_message(message, log, is_group):
         return
 
     if user is None:
-        user = await users.User.init(chat_id, is_group=is_group)
+        if is_group:
+            group_username = message['chat']['username']
+        else:
+            group_username = None
+        user = await users.User.init(chat_id, username=group_username, is_group=is_group)
     if user.default_media_type == users.DefaultMediaType.Audio.value:
         audio_mode = True
 

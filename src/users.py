@@ -23,7 +23,7 @@ class User:
         self.settings = None
 
     @staticmethod
-    async def init(id, is_group=False, force_create=False):
+    async def init(id, username=None,is_group=False, force_create=False):
         user = User()
         user_id = ('user' if not is_group else 'chat') + str(id)
         user_settings = await get_user_no_read(id)
@@ -45,6 +45,8 @@ class User:
             'audio_caption': False if not is_group else True,
             'video_caption': False if not is_group else True
         }
+        if username:
+            user_settings['username'] = str(username)
         user_settings = await create_user(user_settings)
         user.settings = user_settings
 
