@@ -585,7 +585,7 @@ async def _on_message(message, log, is_group):
                             try:
                                 if is_group and ('youtube.com' in u or 'youtu.be' in u):
                                     invid_url = youtube_to_invidio(u, audio_mode == True, quality='hd720')
-                                    u = invid_url
+                                    u = invid_url + "&raw=1"
                                     ydl.params['force_generic_extractor'] = True
                                 vinfo = await extract_url_info(ydl, u)
                                 if vinfo.get('age_limit') == 18 and is_ytb_link_re.search(vinfo.get('webpage_url', '')):
