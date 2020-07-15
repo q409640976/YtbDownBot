@@ -1325,7 +1325,6 @@ def sig_handler():
 if __name__ == '__main__':
     print('Allowed storage size: ', STORAGE_SIZE)
     app = web.Application()
-    client.start()
     app.add_routes([web.post('/bot', on_message)])
     # asyncio.get_event_loop().create_task(bot._run_until_disconnected())
     asyncio.get_event_loop().add_signal_handler(signal.SIGABRT, sig_handler)
