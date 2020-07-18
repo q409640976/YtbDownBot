@@ -583,11 +583,17 @@ async def _on_message(message, log, is_group):
                     if vinfo is None:
                         for _ in range(2):
                             try:
+                                # use invidio.us for youtube links from groups to prevent 429 err
                                 if is_group and ('youtube.com' in u or 'youtu.be' in u):
                                     invid_url = youtube_to_invidio(u, audio_mode == True, quality='hd720')
                                     u = invid_url
                                     ydl.params['force_generic_extractor'] = True
                                 vinfo = await extract_url_info(ydl, u)
+                                if is_group and 'invidio.us' in u:
+                                    try:
+                                        vinfo['entries'][0]['url'] = u + '&raw=1'
+                                    except:
+                                        pass
                                 if vinfo.get('age_limit') == 18 and is_ytb_link_re.search(vinfo.get('webpage_url', '')):
                                     raise youtube_dl.DownloadError('youtube age limit')
                             except youtube_dl.DownloadError as e:
