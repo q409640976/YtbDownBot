@@ -186,7 +186,7 @@ class FFMpegAV(DumbReader):
             cut_time_duration_arg += ['-t', cut_time_end, "-shortest"]
 
         args = _fstream.compile()
-        restrict_file_size_args = ['-fs', '1551892480'] if restrict_size else []
+        restrict_file_size_args = ['-fs', '2086666240'] if restrict_size else []
         if aformat:
             # args = _fstream.global_args('headers',
             #                             "\n".join(headers),
