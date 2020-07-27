@@ -29,6 +29,8 @@ import signal
 import functools
 import fast_telethon
 import aiofiles
+from extractor.tiktok import TikTokIE
+from extractor.pinterest import PinterestIE
 
 
 def get_client_session():
@@ -608,6 +610,31 @@ async def _on_message(message, log, is_group):
                                         ydl.params['force_generic_extractor'] = True
                                         continue
                                     raise
+                                elif e.exc_info is not None and e.exc_info[0] is youtube_dl.utils.UnsupportedError:
+                                    tk = TikTokIE()
+                                    pn = PinterestIE()
+                                    if tk.suitable(u):
+                                        # Tiktok inject
+                                        ydl.add_info_extractor(tk)
+                                        ydl._ies = [TikTokIE] + ydl._ies
+                                        vinfo = await extract_url_info(ydl, u)
+                                    elif pn.suitable(u):
+                                        # Pinterest inject
+                                        ydl.add_info_extractor(pn)
+                                        ydl._ies = [PinterestIE] + ydl._ies
+                                        vinfo = await extract_url_info(ydl, u)
+                                    else:
+                                        raise
+                                elif e.exc_info is not None and e.exc_info[0] is youtube_dl.utils.RegexNotFoundError:
+                                    # Temp fix for instagram.com
+                                    iie = youtube_dl.extractor.instagram.InstagramIE()
+                                    if not iie.suitable(u):
+                                        raise
+                                    mobj = re.match(iie._VALID_URL, u)
+                                    u = mobj.group('url') + '/embed/'
+                                    ydl.params['force_generic_extractor'] = True
+                                    vinfo = await extract_url_info(ydl, u)
+                                    vinfo['url'] = vinfo['url'].replace('\\u0026', '&')
                                 else:
                                     raise
 
