@@ -183,22 +183,13 @@ async def _on_message_task(message):
             # crashing to try change ip
             # otherwise youtube.com will not allow us
             # to download any video for some time
-            if e.code == 429:
-                log.critical(e)
-                await shutdown()
-            else:
-                log.exception(e)
-                if not is_group:
-                    await client.send_message(chat_id, e.__str__(), reply_to=msg_id)
+            log.exception(e)
+            if not is_group:
+                await client.send_message(chat_id, e.__str__(), reply_to=msg_id)
         except youtube_dl.DownloadError as e:
             # crashing to try change ip
             # otherwise youtube.com will not allow us
             # to download any video for some time
-            if e.exc_info[0] is HTTPError:
-                if e.exc_info[1].file.code == 429:
-                    log.critical(e)
-                    await shutdown()
-
             log.exception(e)
             if not is_group:
                 await client.send_message(chat_id, str(e), reply_to=msg_id)
