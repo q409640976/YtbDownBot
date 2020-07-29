@@ -657,7 +657,11 @@ async def _on_message(message, log, is_group):
                                     u = mobj.group('url') + '/embed/'
                                     ydl.params['force_generic_extractor'] = True
                                     vinfo = await extract_url_info(ydl, u)
-                                    vinfo['url'] = vinfo['url'].replace('\\u0026', '&')
+                                    if 'entries' in vinfo:
+                                        for i, _u in enumerate(vinfo['entries']):
+                                            vinfo['entries'][i]['url'] =  vinfo['entries'][i]['url'].replace('\\u0026', '&')
+                                    else:
+                                        vinfo['url'] = vinfo['url'].replace('\\u0026', '&')
                                 else:
                                     raise
 
