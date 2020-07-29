@@ -288,9 +288,10 @@ class URLav(DumbReader):
     @staticmethod
     async def create(url, headers=None):
         urlav = await URLav._create(url, headers)
-        if urlav.request.status != 200:
+        if urlav.request.status >= 400:
             await urlav.close()
             urlav = await URLav._create(url)
+            urlav.request.raise_for_status()
         return urlav
 
 
