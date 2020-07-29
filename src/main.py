@@ -370,6 +370,23 @@ async def upload_multipart_zip(source, name, file_size, chat_id, msg_id):
 #     return invid_urls
 
 
+def get_cookie_from_text(msg_txt):
+    try:
+        return msg_txt.split(' || ')[1].strip()
+        # parts = [p.strip() for p in msg_txt.split(' || ')][1:]
+        # headers = {kv.split('=')[0].strip(): kv.split('=')[1].strip() for kv in parts}
+    except:
+        return None
+
+def get_user_prefs_from_text(msg_txt):
+    try:
+        msg_parts = [part.strip() for part in msg_txt.split(' | ')][1:]
+        msg_parts[-1] = msg_parts[-1].split(' || ')[0]
+    except:
+        return []
+    return msg_parts
+
+
 async def _on_message(message, log, is_group):
     global STORAGE_SIZE
     if message['from']['is_bot']:
@@ -387,6 +404,15 @@ async def _on_message(message, log, is_group):
     log.info('message: ' + msg_txt)
 
     urls = url_extractor.find_urls(msg_txt)
+    user_cookie = get_cookie_from_text(msg_txt)
+    user_prefs = get_user_prefs_from_text(msg_txt)
+    user_file_name = user_uname = user_passwd = None
+    if len(user_prefs) == 1:
+        user_file_name, = user_prefs
+    elif len(user_prefs) == 2:
+        user_uname, user_passwd = user_prefs
+    elif len(user_prefs) == 3:
+        user_file_name, user_uname, user_passwd = user_prefs
     cmd = cmd_from_message(message)
     playlist_start = None
     playlist_end = None
@@ -573,8 +599,12 @@ async def _on_message(message, log, is_group):
                     params['playlistend'] = playlist_end
             else:
                 params['playlist_items'] = '1'
-
+            if user_uname and user_passwd:
+                params['username'] = user_uname
+                params['password'] = user_passwd
             ydl = youtube_dl.YoutubeDL(params=params)
+            if user_cookie:
+                ydl._opener.addheaders = [('Cookie', user_cookie)]
             recover_playlist_index = None  # to save last playlist position if finding format failed
             for ip, pref_format in enumerate(preferred_formats):
                 try:
@@ -716,6 +746,14 @@ async def _on_message(message, log, is_group):
                     if not entry.get('direct', False):
                         http_headers['Referer'] = u
 
+                    if user_cookie:
+                        http_headers['Cookie'] = user_cookie
+                    elif len(ydl.cookiejar) > 0:
+                        http_headers.setdefault('Cookie', "")
+                        for i, cookie in enumerate(ydl.cookiejar):
+                            http_headers['Cookie'] += cookie.name + "=" + cookie.value
+                            if i != len(ydl.cookiejar) - 1:
+                                http_headers['Cookie'] += "; "
                     _title = entry.get('title', '')
                     if _title == '':
                         entry['title'] = str(msg_id)
@@ -939,7 +977,11 @@ async def _on_message(message, log, is_group):
                                                                         parse_mode='html')
                                             return
                                         source = await av_source.URLav.create(entry.get('url'), http_headers)
-                                        await upload_multipart_zip(source, entry['title']+'.'+entry['ext'], _file_size, chat_id, msg_id)
+                                        await upload_multipart_zip(source,
+                                                                   (entry['title']+'.'+entry['ext']) if user_file_name is None else user_file_name,
+                                                                   _file_size,
+                                                                   chat_id,
+                                                                   msg_id)
                                     else:
                                         if not is_group:
                                             await client.send_message(chat_id,
@@ -995,7 +1037,9 @@ async def _on_message(message, log, is_group):
                                 chosen_format['url'],
                                 http_headers)
                             await upload_multipart_zip(upload_file,
-                                                       entry['title'] + '.' + entry['ext'], _file_size, chat_id,
+                                                       (entry['title'] + '.' + entry['ext']) if user_file_name is None else user_file_name,
+                                                       _file_size,
+                                                       chat_id,
                                                        msg_id)
                             return
                         if audio_mode == True and _file_size != 0 and (ffmpeg_av is None or ffmpeg_av.file_name is None):
@@ -1188,13 +1232,13 @@ async def _on_message(message, log, is_group):
                                     file = await fast_telethon.upload_file(client,
                                                                            upload_file,
                                                                            file_size,
-                                                                           file_name,
+                                                                           file_name if user_file_name is None else user_file_name,
                                                                            max_connection=connections)
                                 finally:
                                     TG_CONNECTIONS_COUNT -= connections
                             else:
                                 file = await client.upload_file(upload_file,
-                                                                file_name=file_name,
+                                                                file_name=file_name if user_file_name is None else user_file_name,
                                                                 file_size=file_size,
                                                                 http_headers=http_headers)
                         except AuthKeyDuplicatedError as e:
