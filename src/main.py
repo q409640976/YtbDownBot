@@ -613,10 +613,12 @@ async def _on_message(message, log, is_group):
                                 elif e.exc_info is not None and e.exc_info[0] is youtube_dl.utils.UnsupportedError:
                                     tk = TikTokIE()
                                     pn = PinterestIE()
-                                    if tk.suitable(u):
+                                    if tk.suitable(u) or (len(e.exc_info) > 1 and tk.suitable(e.exc_info[1].url)):
                                         # Tiktok inject
                                         ydl.add_info_extractor(tk)
                                         ydl._ies = [TikTokIE] + ydl._ies
+                                        if 'tiktok.com/@' not in u:
+                                            u = e.exc_info[1].url
                                         vinfo = await extract_url_info(ydl, u)
                                     elif pn.suitable(u):
                                         # Pinterest inject
@@ -733,7 +735,7 @@ async def _on_message(message, log, is_group):
                         if thumb_url:
                             await client.send_file(chat_id, thumb_url, reply_to=msg_id if not is_group else None)
                         else:
-                            await client.send_message(chat_id, 'Media don\'t contain thumbnail')
+                            await client.send_message(chat_id, 'Media doesn\'t contain thumbnail')
 
                         return
 
@@ -1256,7 +1258,7 @@ async def _on_message(message, log, is_group):
                                                     (((user.default_media_type == users.DefaultMediaType.Audio.value) or
                                                       (audio_mode == True))
                                                      and user.audio_caption) else ''
-                        if is_group:
+                        if is_group and caption:
                             chat_username = message['chat']['username']
                             caption = '['+caption+']' + f'(https://t.me/{chat_username}/{msg_id})'
                         recover_playlist_index = None

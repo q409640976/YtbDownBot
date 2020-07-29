@@ -51,10 +51,11 @@ class TikTokIE(InfoExtractor):
 
         # The watermarkless video ID is embedded in the first video file, so we need to download it and get the video ID.
         watermarked_url = video_data['videoData']['itemInfos']['video']['urls'][0]
-        watermarked_response = self._download_webpage(watermarked_url, video_id)
-        idpos = watermarked_response.index("vid:")
-        watermarkless_video_id = watermarked_response[idpos + 4:idpos + 36]
-        watermarkless_url = "https://api2-16-h2.musical.ly/aweme/v1/play/?video_id={}&vr_type=0&is_play_url=1&source=PackSourceEnum_PUBLISH&media_type=4".format(watermarkless_video_id)
+        # watermarked_response = self._download_webpage(watermarked_url, video_id)
+        # idpos = watermarked_response.index("vid:")
+        # watermarkless_video_id = watermarked_response[idpos + 4:idpos + 36]
+        # watermarkless_url = "https://api2-16-h2.musical.ly/aweme/v1/play/?video_id={}&vr_type=0&is_play_url=1&source=PackSourceEnum_PUBLISH&media_type=4".format(watermarkless_video_id)
+        watermarkless_url = watermarked_url
 
         # Get extra metadata
         video_info = try_get(video_data, lambda x: x['videoData']['itemInfos'], dict)
