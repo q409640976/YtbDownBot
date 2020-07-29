@@ -94,8 +94,9 @@ class FFMpegAV(DumbReader):
         # _finput = ffmpeg.input(vformat['url'], **{"user-agent": user_agent, "loglevel": "error"})
         _finput = None
 
-        file_name = file_name[:30]
         if file_name:
+            if len(file_name) > 100:
+                file_name = file_name[:50] + file_name[-50:]
             ff.file_name = "'" + file_name.replace('/', '').replace('\'', '') + "'"
 
         cut_time_fix_args = []

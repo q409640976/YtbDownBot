@@ -659,7 +659,7 @@ async def _on_message(message, log, is_group):
                                     vinfo = await extract_url_info(ydl, u)
                                     if 'entries' in vinfo:
                                         for i, _u in enumerate(vinfo['entries']):
-                                            vinfo['entries'][i]['url'] =  vinfo['entries'][i]['url'].replace('\\u0026', '&')
+                                            vinfo['entries'][i]['url'] = vinfo['entries'][i]['url'].replace('\\u0026', '&')
                                     else:
                                         vinfo['url'] = vinfo['url'].replace('\\u0026', '&')
                                 else:
@@ -1176,7 +1176,7 @@ async def _on_message(message, log, is_group):
                         if cmd == 'm' and chosen_format.get('ext') != 'mp4' and ffmpeg_av is None and (
                                 video_codec == 'h264' or video_codec == 'hevc') and \
                                 (audio_codec == 'mp3' or audio_codec == 'aac'):
-                            file_name = entry.get('title', 'default') + '.mp4'
+                            file_name = str(chat_id) + ':' + str(msg_id) + ':' + entry.get('title', 'default') + '.mp4'
                             if STORAGE_SIZE > _file_size > 0:
                                 STORAGE_SIZE -= _file_size
                                 ffmpeg_av = await av_source.FFMpegAV.create(chosen_format,
