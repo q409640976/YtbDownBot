@@ -398,6 +398,8 @@ async def _on_message(message, log, is_group):
     user_cookie = get_cookie_from_text(msg_txt)
     user_prefs = get_user_prefs_from_text(msg_txt)
     user_file_name = user_uname = user_passwd = None
+    if len(user_prefs) != 0 and len(urls) > 1:
+        urls = urls[:1]
     if len(user_prefs) == 1:
         user_file_name, = user_prefs
     elif len(user_prefs) == 2:
