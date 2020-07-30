@@ -1297,9 +1297,13 @@ async def _on_message(message, log, is_group):
                                                     (((user.default_media_type == users.DefaultMediaType.Audio.value) or
                                                       (audio_mode == True))
                                                      and user.audio_caption) else ''
-                        if is_group and caption:
+                        if is_group and user.settings.get('addlink', 1):
                             chat_username = message['chat']['username']
-                            caption = '['+caption+']' + f'(https://t.me/{chat_username}/{msg_id})'
+                            if chat_username is None:
+                                link = f'https://t.me/ytbdownbot'
+                            else:
+                                link = f'https://t.me/{chat_username}/{msg_id}'
+                            caption = '['+caption+']' + f'({link})'
                         recover_playlist_index = None
                         _thumb = None
                         try:
