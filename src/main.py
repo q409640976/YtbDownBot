@@ -543,6 +543,10 @@ async def _on_message(message, log, is_group):
     if user is None:
         if is_group:
             group_username = message['chat']['username']
+            _from_id = message['from']['id']
+            is_user_sane = await users.is_user_sane(_from_id)
+            if not is_user_sane:
+                raise Exception('Bad user')
         else:
             group_username = None
         user = await users.User.init(chat_id, username=group_username, is_group=is_group)
