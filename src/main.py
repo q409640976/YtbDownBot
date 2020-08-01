@@ -441,7 +441,12 @@ async def _on_message(message, log, is_group):
         elif cmd == 'settings':
             if is_group:
                 await client.send_message(chat_id,
-                                          'Command not available in chats',
+                                          'Settings for groups/channels can be changed only by @pony0boy\n'
+                                          'Ask him if you want:\n'
+                                          '- Disable links in caption\n'
+                                          '- Enable reply to messages\n'
+                                          '- Disable caption\n'
+                                          'Its cost 2$ per group/channel',
                                           reply_to=msg_id)
                 return
             user = await users.User.init(chat_id, is_group=is_group)
