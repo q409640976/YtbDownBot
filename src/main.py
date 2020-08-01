@@ -594,7 +594,7 @@ async def _on_message(message, log, is_group):
                       'is_group': True,
                       'no_color': True,
                       'nocheckcertificate': True
-                      # 'force_generic_extractor': True if 'invidio.us/watch' in u else False
+                      'force_generic_extractor': True if 'invidio.us/watch' in u else False
                       }
             if playlist_start != None and playlist_end != None: #and 'invidio.us/watch' not in u:
                 params['ignoreerrors'] = True
