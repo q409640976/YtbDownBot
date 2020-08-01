@@ -1315,7 +1315,10 @@ async def _on_message(message, log, is_group):
                         if is_group and user.settings.get('addlink', 1):
                             chat_username = message['chat']['username']
                             if chat_username is None:
-                                link = f'https://t.me/ytbdownbot'
+                                if str(chat_id).startswith('-100'):
+                                    link = f'https://t.me/c/{str(chat_id)[4:]}/{msg_id}'
+                                else:
+                                    link = f'https://t.me/ytbdownbot'
                             else:
                                 link = f'https://t.me/{chat_username}/{msg_id}'
                             caption = '['+caption+']' + f'({link})'
@@ -1336,7 +1339,8 @@ async def _on_message(message, log, is_group):
                                                        force_document=force_document,
                                                        supports_streaming=False if ffmpeg_av is not None else True,
                                                        thumb=_thumb,
-                                                       reply_to=msg_id if not is_group else None)
+                                                       reply_to=msg_id if not is_group or user.settings.get('force_reply', 0) else None,
+                                                       silent=True if is_group else False)
                             except AuthKeyDuplicatedError as e:
                                 if not is_group:
                                     await client.send_message(chat_id, 'INTERNAL ERROR: try again')
