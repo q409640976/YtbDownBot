@@ -348,17 +348,18 @@ async def upload_multipart_zip(source, name, file_size, chat_id, msg_id):
             await source.close()
         else:
             source.close()
-#
-# async def ytb_playlist_to_invidious(url, range):
-#     invid_urls = []
-#     playlist_id_r = re.compile(r'list=((?:PL|LL|EC|UU|FL|RD|UL|TL|PU|OLAK5uy_)[0-9A-Za-z-_]{10,})')
-#     pid = playlist_id_r.search(url).groups()[0]
-#     async with ClientSession() as session:
-#         async with session.get("https://invidio.us/api/v1/playlists/"+pid) as req:
-#             invid_playlist = await req.json()
-#     for iv in invid_playlist['videos'][range[0]-1:range[1]]:
-#         invid_urls.append("https://invidio.us/watch?v=" + iv['videoId'] + "&quality=dash")
-#     return invid_urls
+
+            
+async def ytb_playlist_to_invidious(url, range):
+    invid_urls = []
+    playlist_id_r = re.compile(r'list=((?:PL|LL|EC|UU|FL|RD|UL|TL|PU|OLAK5uy_)[0-9A-Za-z-_]{10,})')
+    pid = playlist_id_r.search(url).groups()[0]
+    async with ClientSession() as session:
+        async with session.get("https://invidio.us/api/v1/playlists/"+pid) as req:
+            invid_playlist = await req.json()
+    for iv in invid_playlist['videos'][range[0]-1:range[1]]:
+        invid_urls.append("https://invidio.us/watch?v=" + iv['videoId'] + "&quality=dash")
+    return invid_urls
 
 
 def get_cookie_from_text(msg_txt):
@@ -380,6 +381,7 @@ def get_user_prefs_from_text(msg_txt):
 
 async def _on_message(message, log, is_group):
     global STORAGE_SIZE
+    global YT_TOO_MANY_REQUEST
     if message['from']['is_bot']:
         log.info('Message from bot, skip')
         return
@@ -571,8 +573,11 @@ async def _on_message(message, log, is_group):
 
     # await _bot.send_chat_action(chat_id, "upload_document")
 
-    # if len(urls) == 1 and 'youtube.com/playlist?list=' in urls[0] and playlist_start is not None:
-    #     urls = await ytb_playlist_to_invidious(urls[0], (playlist_start,playlist_end))
+    if YT_TOO_MANY_REQUEST and 'youtube.com/playlist?list=' in urls[0] and playlist_start is not None:
+        try:
+            urls = await ytb_playlist_to_invidious(urls[0], (playlist_start,playlist_end))
+        except:
+            pass
     if not is_group:
         action = await client.action(chat_id, "file").__aenter__()
     try:
@@ -633,6 +638,8 @@ async def _on_message(message, log, is_group):
                                         'youtube age limit' == str(e):
                                     invid_url = youtube_to_invidio(u, audio_mode == True)
                                     if invid_url:
+                                        if e.exc_info[1].file.code == 429:
+                                            YT_TOO_MANY_REQUEST = True
                                         u = invid_url
                                         ydl.params['force_generic_extractor'] = True
                                         continue
@@ -647,10 +654,12 @@ async def _on_message(message, log, is_group):
                                         if 'tiktok.com/@' not in u:
                                             u = e.exc_info[1].url
                                         vinfo = await extract_url_info(ydl, u)
-                                    elif pn.suitable(u):
+                                    elif pn.suitable(u) or (len(e.exc_info) > 1 and tk.suitable(e.exc_info[1].url)):
                                         # Pinterest inject
                                         ydl.add_info_extractor(pn)
                                         ydl._ies = [PinterestIE] + ydl._ies
+                                        if 'pin.it' in u:
+                                            u = e.exc_info[1].url
                                         vinfo = await extract_url_info(ydl, u)
                                     else:
                                         raise
@@ -1391,7 +1400,7 @@ TG_MAX_PARALLEL_CONNECTIONS = 20
 TG_CONNECTIONS_COUNT = 0
 MAX_STORAGE_SIZE = int(os.getenv('STORAGE_SIZE', 0)) * 1024 * 1024
 STORAGE_SIZE = MAX_STORAGE_SIZE
-
+YT_TOO_MANY_REQUEST = False
 
 async def shutdown():
     await tg_client_shutdown()
