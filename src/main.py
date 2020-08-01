@@ -654,7 +654,7 @@ async def _on_message(message, log, is_group):
                                         if 'tiktok.com/@' not in u:
                                             u = e.exc_info[1].url
                                         vinfo = await extract_url_info(ydl, u)
-                                    elif pn.suitable(u) or (len(e.exc_info) > 1 and tk.suitable(e.exc_info[1].url)):
+                                    elif pn.suitable(u) or (len(e.exc_info) > 1 and pn.suitable(e.exc_info[1].url)):
                                         # Pinterest inject
                                         ydl.add_info_extractor(pn)
                                         ydl._ies = [PinterestIE] + ydl._ies
