@@ -302,7 +302,7 @@ class URLav(DumbReader):
         u.session = await ClientSession(timeout=ClientTimeout(total=10800,
                                                               connect=240,
                                                               sock_connect=200,
-                                                              sock_read=60), connector=TCPConnector(verify_ssl=False)).__aenter__()
+                                                              sock_read=600), connector=TCPConnector(verify_ssl=False)).__aenter__()
         u.request = await u.session.get(url, headers=headers)
         # u.request = await asks.get(url, headers=headers, stream=True, max_redirects=5)
         # u.body = u.request.body(timeout=14400)
