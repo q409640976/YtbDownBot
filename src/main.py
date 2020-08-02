@@ -261,6 +261,7 @@ is_ytb_link_re = re.compile(
     '^((?:https?:)?\/\/)?((?:www|m|music)\.)?((?:youtube\.com|youtu.be))(\/(?:[\w\-]+\?v=|embed\/|v\/)?)([\w\-]+)(\S+)?$')
 get_ytb_id_re = re.compile(
     '.*(youtu.be\/|v\/|embed\/|watch\?|youtube.com\/user\/[^#]*#([^\/]*?\/)*)\??v?=?([^#\&\?]*).*')
+invidious_re = re.compile(r'https?://(?:www\.)?invidio\.us/watch\?v=(?P<id>[0-9A-Za-z_-]{11})')
 
 single_time_re = re.compile(' ((2[0-3]|[01]?[0-9]):)?(([0-5]?[0-9]):)?([0-5]?[0-9])(\\.[0-9]+)? ')
 
@@ -594,7 +595,7 @@ async def _on_message(message, log, is_group):
                       'is_group': True,
                       'no_color': True,
                       'nocheckcertificate': True,
-                      'force_generic_extractor': True if 'invidio.us/watch' in u else False
+                      'force_generic_extractor': True if invidious_re.search(u) else False
                       }
             if playlist_start != None and playlist_end != None: #and 'invidio.us/watch' not in u:
                 params['ignoreerrors'] = True
@@ -628,7 +629,7 @@ async def _on_message(message, log, is_group):
                                     u = invid_url
                                     ydl.params['force_generic_extractor'] = True
                                 vinfo = await extract_url_info(ydl, u)
-                                if is_group and 'invidio.us' in u:
+                                if is_group and invidious_re.search(u):
                                     try:
                                         vinfo['entries'][0]['url'] = u + '&raw=1'
                                     except:
@@ -709,14 +710,19 @@ async def _on_message(message, log, is_group):
                                 vinfo = await extract_url_info(ydl, u)
                             except Exception as e:
                                 log.error(e)
-                                continue
+                                if not is_group:
+                                    await client.send_message(chat_id, "ERROR: " + str(e), reply_to=msg_id)
+                                break
                     if 'are video-only' in str(e):
                         params['format'] = 'bestvideo[ext=mp4]/bestvideo'
                         ydl = youtube_dl.YoutubeDL(params=params)
                         try:
                             vinfo = await extract_url_info(ydl, u)
                         except Exception as e:
-                            raise
+                            log.error(e)
+                            if not is_group:
+                                await client.send_message(chat_id, "ERROR: " + str(e), reply_to=msg_id)
+                            break
                     if iu < len(urls) - 1:
                         log.error(e)
                         if not is_group:
