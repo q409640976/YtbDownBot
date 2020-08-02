@@ -261,7 +261,7 @@ is_ytb_link_re = re.compile(
     '^((?:https?:)?\/\/)?((?:www|m|music)\.)?((?:youtube\.com|youtu.be))(\/(?:[\w\-]+\?v=|embed\/|v\/)?)([\w\-]+)(\S+)?$')
 get_ytb_id_re = re.compile(
     '.*(youtu.be\/|v\/|embed\/|watch\?|youtube.com\/user\/[^#]*#([^\/]*?\/)*)\??v?=?([^#\&\?]*).*')
-invidious_re = re.compile(r'https?://(?:www\.)?invidio\.us/watch\?v=(?P<id>[0-9A-Za-z_-]{11})')
+invidious_re = re.compile(r'https?://(?:www\.)?invidious\.snopyta\.org/watch\?v=(?P<id>[0-9A-Za-z_-]{11})')
 
 single_time_re = re.compile(' ((2[0-3]|[01]?[0-9]):)?(([0-5]?[0-9]):)?([0-5]?[0-9])(\\.[0-9]+)? ')
 
@@ -297,15 +297,13 @@ def normalize_url_path(url):
     return urlunparse(parsed)
 
 
-def youtube_to_invidio(url, audio=False, quality='dash'):
+def youtube_to_invidio(url, quality='dash'):
     u = None
     if is_ytb_link_re.search(url):
         ytb_id_match = get_ytb_id_re.search(url)
         if ytb_id_match:
             ytb_id = ytb_id_match.groups()[-1]
-            u = "https://invidio.us/watch?v=" + ytb_id + f"&quality={quality}"
-            if audio:
-                u += '&listen=1'
+            u = "https://invidious.snopyta.org/watch?v=" + ytb_id + f"&quality={quality}"
     return u
 
 async def upload_multipart_zip(source, name, file_size, chat_id, msg_id):
@@ -351,15 +349,15 @@ async def upload_multipart_zip(source, name, file_size, chat_id, msg_id):
             source.close()
 
             
-async def ytb_playlist_to_invidious(url, range):
+async def ytb_playlist_to_invidious(url, range, quality="dash"):
     invid_urls = []
     playlist_id_r = re.compile(r'list=((?:PL|LL|EC|UU|FL|RD|UL|TL|PU|OLAK5uy_)[0-9A-Za-z-_]{10,})')
     pid = playlist_id_r.search(url).groups()[0]
     async with ClientSession() as session:
-        async with session.get("https://invidio.us/api/v1/playlists/"+pid) as req:
+        async with session.get("https://invidious.snopyta.org/api/v1/playlists/"+pid) as req:
             invid_playlist = await req.json()
     for iv in invid_playlist['videos'][range[0]-1:range[1]]:
-        invid_urls.append("https://invidio.us/watch?v=" + iv['videoId'] + "&quality=dash")
+        invid_urls.append("https://invidious.snopyta.org/watch?v=" + iv['videoId'] + "&quality="+quality+("&raw=1" if quality != "dash" else ""))
     return invid_urls
 
 
@@ -581,7 +579,10 @@ async def _on_message(message, log, is_group):
 
     if YT_TOO_MANY_REQUEST and 'youtube.com/playlist?list=' in urls[0] and playlist_start is not None:
         try:
-            urls = await ytb_playlist_to_invidious(urls[0], (playlist_start,playlist_end))
+            if audio_mode:
+                urls = await ytb_playlist_to_invidious(urls[0], (playlist_start,playlist_end))
+            else:
+                urls = await ytb_playlist_to_invidious(urls[0], (playlist_start, playlist_end), quality='hd720')
         except:
             pass
     if not is_group or user.settings.get('nonprivate_action', 0):
@@ -597,7 +598,7 @@ async def _on_message(message, log, is_group):
                       'nocheckcertificate': True,
                       'force_generic_extractor': True if invidious_re.search(u) else False
                       }
-            if playlist_start != None and playlist_end != None: #and 'invidio.us/watch' not in u:
+            if playlist_start != None and playlist_end != None: #and 'invidious.snopyta.org/watch' not in u:
                 params['ignoreerrors'] = True
                 if playlist_start == 0 and playlist_end == 0:
                     params['playliststart'] = 1
@@ -623,28 +624,33 @@ async def _on_message(message, log, is_group):
                     if vinfo is None:
                         for i_ in range(2):
                             try:
-                                # use invidio.us for youtube links from groups to prevent 429 err
-                                if is_group and ('youtube.com' in u or 'youtu.be' in u):
-                                    invid_url = youtube_to_invidio(u, audio_mode == True, quality='hd720')
-                                    u = invid_url
+                                # use invidious.snopyta.org for youtube links from groups to prevent 429 err
+                                if is_group and invidious_re.search(u):
+                                    if audio_mode:
+                                        u = youtube_to_invidio(u)
+                                    else:
+                                        u = youtube_to_invidio(u, quality='hd720')
                                     ydl.params['force_generic_extractor'] = True
                                 vinfo = await extract_url_info(ydl, u)
                                 if is_group and invidious_re.search(u):
                                     try:
-                                        vinfo['entries'][0]['url'] = u + '&raw=1'
+                                        vinfo['entries'][0]['url'] = u + ('&raw=1' if not audio_mode else '')
                                     except:
                                         pass
                                 if vinfo.get('age_limit') == 18 and is_ytb_link_re.search(vinfo.get('webpage_url', '')):
                                     raise youtube_dl.DownloadError('youtube age limit')
                             except youtube_dl.DownloadError as e:
-                                # try to use invidio.us youtube frontend to bypass 429 block
+                                # try to use invidious.snopyta.org youtube frontend to bypass 429 block
                                 if (e.exc_info is not None and e.exc_info[0] is HTTPError and e.exc_info[
                                     1].file.code == 429) or \
                                         'video available in your country' in str(e) or \
                                         'youtube age limit' == str(e):
                                     if i_ == 1:
                                         raise
-                                    invid_url = youtube_to_invidio(u, audio_mode == True)
+                                    if audio_mode:
+                                        invid_url = youtube_to_invidio(u)
+                                    else:
+                                        invid_url = youtube_to_invidio(u, quality='hd720&raw=1')
                                     if invid_url:
                                         if e.exc_info[1].file.code == 429:
                                             YT_TOO_MANY_REQUEST = True
@@ -774,7 +780,7 @@ async def _on_message(message, log, is_group):
 
                     if cmd == 's':
                         direct_url = entry.get('url') if formats is None else formats[0].get('url')
-                        if 'invidio.us' in direct_url:
+                        if 'invidious.snopyta.org' in direct_url:
                             direct_url = normalize_url_path(direct_url)
 
                         await send_screenshot(chat_id,
@@ -808,7 +814,7 @@ async def _on_message(message, log, is_group):
                                     else:
                                         try:
                                             direct_url = f['url']
-                                            if 'invidio.us' in direct_url:
+                                            if 'invidious.snopyta.org' in direct_url:
                                                 direct_url = normalize_url_path(direct_url)
                                             _file_size = await av_utils.media_size(direct_url, http_headers=http_headers)
                                         except Exception as e:
@@ -826,7 +832,7 @@ async def _on_message(message, log, is_group):
                                     vsize = 0
 
                                     direct_url = vformat['url']
-                                    if 'invidio.us' in direct_url:
+                                    if 'invidious.snopyta.org' in direct_url:
                                         vformat['url'] = normalize_url_path(direct_url)
 
                                     if 'filesize' in vformat and vformat['filesize'] != 0 and vformat[
@@ -841,7 +847,7 @@ async def _on_message(message, log, is_group):
                                         mformat = formats[i + 1]
 
                                         direct_url = mformat['url']
-                                        if 'invidio.us' in direct_url:
+                                        if 'invidious.snopyta.org' in direct_url:
                                             mformat['url'] = normalize_url_path(direct_url)
 
                                         if 'filesize' in mformat and mformat['filesize'] != 0 and mformat[
@@ -904,7 +910,7 @@ async def _on_message(message, log, is_group):
                                     chosen_format = f
 
                                     direct_url = chosen_format['url']
-                                    if 'invidio.us' in direct_url:
+                                    if 'invidious.snopyta.org' in direct_url:
                                         chosen_format['url'] = normalize_url_path(direct_url)
 
                                     if audio_mode == True and not (chosen_format['ext'] == 'mp3'):
@@ -934,7 +940,7 @@ async def _on_message(message, log, is_group):
                                     _file_size = entry['filesize']
                                 else:
                                     direct_url = entry['url']
-                                    if 'invidio.us' in direct_url:
+                                    if 'invidious.snopyta.org' in direct_url:
                                         entry['url'] = normalize_url_path(direct_url)
                                     try:
                                         _file_size = await av_utils.media_size(direct_url, http_headers=http_headers)
@@ -965,7 +971,7 @@ async def _on_message(message, log, is_group):
                             elif (_file_size <= TG_MAX_FILE_SIZE) or cut_time_start is not None or cmd == 'z':
                                 chosen_format = entry
                                 direct_url = chosen_format['url']
-                                if 'invidio.us' in direct_url:
+                                if 'invidious.snopyta.org' in direct_url:
                                     chosen_format['url'] = normalize_url_path(direct_url)
                                 if audio_mode == True and not (chosen_format['ext'] == 'mp3'):
                                     ffmpeg_av = await av_source.FFMpegAV.create(chosen_format,
