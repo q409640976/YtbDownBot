@@ -583,7 +583,7 @@ async def _on_message(message, log, is_group):
             urls = await ytb_playlist_to_invidious(urls[0], (playlist_start,playlist_end))
         except:
             pass
-    if not is_group:
+    if not is_group or user.settings.get('nonprivate_action', 0):
         action = await client.action(chat_id, "file").__aenter__()
     try:
         urls = set(urls)
@@ -1368,7 +1368,7 @@ async def _on_message(message, log, is_group):
                 if recover_playlist_index is None:
                     break
     finally:
-        if not is_group:
+        if not is_group or user.settings.get('nonprivate_action', 0):
             await action.__aexit__()
 
 
