@@ -620,7 +620,7 @@ async def _on_message(message, log, is_group):
                         params['playliststart'] += recover_playlist_index
                     ydl.params = params
                     if vinfo is None:
-                        for _ in range(2):
+                        for i_ in range(2):
                             try:
                                 # use invidio.us for youtube links from groups to prevent 429 err
                                 if is_group and ('youtube.com' in u or 'youtu.be' in u):
@@ -641,6 +641,8 @@ async def _on_message(message, log, is_group):
                                     1].file.code == 429) or \
                                         'video available in your country' in str(e) or \
                                         'youtube age limit' == str(e):
+                                    if i_ == 1:
+                                        raise
                                     invid_url = youtube_to_invidio(u, audio_mode == True)
                                     if invid_url:
                                         if e.exc_info[1].file.code == 429:
@@ -699,7 +701,7 @@ async def _on_message(message, log, is_group):
                         log.debug('video info reprocessed with new format')
                 except Exception as e:
                     if "Please log in or sign up to view this video" in str(e):
-                        if 'vk.com' in u:
+                        if 'vk.com' in u and 'username' not in params:
                             params['username'] = os.environ['VIDEO_ACCOUNT_USERNAME']
                             params['password'] = os.environ['VIDEO_ACCOUNT_PASSWORD']
                             ydl = youtube_dl.YoutubeDL(params=params)
@@ -707,31 +709,20 @@ async def _on_message(message, log, is_group):
                                 vinfo = await extract_url_info(ydl, u)
                             except Exception as e:
                                 log.error(e)
-                                if not is_group:
-                                    await client.send_message(chat_id, str(e), reply_to=msg_id)
                                 continue
-                        else:
-                            log.error(e)
-                            if not is_group:
-                                await client.send_message(chat_id, str(e), reply_to=msg_id)
-                            continue
-                    elif 'are video-only' in str(e):
-                        params['format'] = 'bestvideo[ext=mp4]'
+                    if 'are video-only' in str(e):
+                        params['format'] = 'bestvideo[ext=mp4]/bestvideo'
                         ydl = youtube_dl.YoutubeDL(params=params)
                         try:
                             vinfo = await extract_url_info(ydl, u)
                         except Exception as e:
-                            log.error(e)
-                            if not is_group:
-                                await client.send_message(chat_id, str(e), reply_to=msg_id)
-                            continue
-                    else:
-                        if iu < len(urls) - 1:
-                            log.error(e)
-                            if not is_group:
-                                await client.send_message(chat_id, str(e), reply_to=msg_id)
-                            break
-
+                            raise
+                    if iu < len(urls) - 1:
+                        log.error(e)
+                        if not is_group:
+                            await client.send_message(chat_id, "ERROR: " + str(e), reply_to=msg_id)
+                        break
+                    if not vinfo:
                         raise
 
                 entries = None
@@ -760,6 +751,8 @@ async def _on_message(message, log, is_group):
                         http_headers = entry['http_headers']
                     if not entry.get('direct', False):
                         http_headers['Referer'] = u
+
+                    http_headers['Connection'] = 'keep-alive'
 
                     if user_cookie:
                         http_headers['Cookie'] = user_cookie
