@@ -768,12 +768,6 @@ async def _on_message(message, log, is_group):
 
                     if user_cookie:
                         http_headers['Cookie'] = user_cookie
-                    elif len(ydl.cookiejar) > 0:
-                        http_headers.setdefault('Cookie', "")
-                        for i, cookie in enumerate(ydl.cookiejar):
-                            http_headers['Cookie'] += cookie.name + "=" + cookie.value
-                            if i != len(ydl.cookiejar) - 1:
-                                http_headers['Cookie'] += "; "
                     _title = entry.get('title', '')
                     if _title == '':
                         entry['title'] = str(msg_id)
