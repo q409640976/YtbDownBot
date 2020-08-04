@@ -1071,7 +1071,7 @@ async def _on_message(message, log, is_group):
                                 # info = await av_utils.av_info(chosen_format['url'],
                                 #                               use_m3u8=('m3u8' in chosen_format['protocol']))
                                 info = await av_utils.av_info(chosen_format['url'], http_headers=http_headers)
-                                duration = int(float(info['format'].get('duration', 0)))
+                                duration = int(float(info.get('format', {}).get('duration', 0)))
                             else:
                                 duration = int(chosen_format['duration']) if 'duration' not in entry else int(
                                     entry['duration'])
@@ -1105,9 +1105,14 @@ async def _on_message(message, log, is_group):
                                 if _av_ext == 'mp3' or _av_ext == 'm4a' or _av_ext == 'ogg' or format_name == 'mp3' or format_name == 'ogg':
                                     audio_mode = True
                             except KeyError:
-                                width = 0
-                                height = 0
-                                duration = 0
+                                try:
+                                    width = chosen_format.get('width', 0)
+                                    height = chosen_format.get('height', 0)
+                                    duration = int(float(chosen_format.get('duration', 0)))
+                                except:
+                                    width = 0
+                                    height = 0
+                                    duration = 0
                                 format_name = ''
                         else:
                             width, height, duration = chosen_format['width'], chosen_format['height'], \
