@@ -364,10 +364,9 @@ async def ytb_playlist_to_invidious(url, range, quality="dash"):
 def get_cookie_from_text(msg_txt):
     try:
         return msg_txt.split(' || ')[1].strip()
-        # parts = [p.strip() for p in msg_txt.split(' || ')][1:]
-        # headers = {kv.split('=')[0].strip(): kv.split('=')[1].strip() for kv in parts}
     except:
         return None
+
 
 def get_user_prefs_from_text(msg_txt):
     try:
@@ -376,6 +375,15 @@ def get_user_prefs_from_text(msg_txt):
     except:
         return []
     return msg_parts
+
+
+def get_user_headers_from_text(msg_txt):
+    try:
+        parts = [p.strip() for p in msg_txt.split(' ||| ')][1:]
+        headers = {kv.split(':')[0].strip(): kv.split(':')[1].strip() for kv in parts}
+    except:
+        return {}
+    return headers
 
 
 async def _on_message(message, log, is_group):
@@ -398,6 +406,7 @@ async def _on_message(message, log, is_group):
     urls = url_extractor.find_urls(msg_txt)
     user_cookie = get_cookie_from_text(msg_txt)
     user_prefs = get_user_prefs_from_text(msg_txt)
+    user_headers = get_user_headers_from_text(msg_txt)
     user_file_name = user_uname = user_passwd = None
     if len(user_prefs) != 0 and len(urls) > 1:
         urls = urls[:1]
@@ -617,6 +626,11 @@ async def _on_message(message, log, is_group):
                     ydl._opener.addheaders = []
                 ydl._opener.addheaders.append(('Cookie', user_cookie))
                 params['cookiefile'] = "some_cookies"
+            if user_headers:
+                if not ydl._opener.addheaders:
+                    ydl._opener.addheaders = []
+                for k, v in user_headers.items():
+                    ydl._opener.addheaders.append((k, v))
             recover_playlist_index = None  # to save last playlist position if finding format failed
             for ip, pref_format in enumerate(preferred_formats):
                 try:
