@@ -613,7 +613,10 @@ async def _on_message(message, log, is_group):
                 params['password'] = user_passwd
             ydl = youtube_dl.YoutubeDL(params=params)
             if user_cookie:
-                ydl._opener.addheaders = [('Cookie', user_cookie)]
+                if ydl._opener.addheaders is None:
+                    ydl._opener.addheaders = []
+                ydl._opener.addheaders.append(('Cookie', user_cookie))
+                params['cookiefile'] = "some_cookies"
             recover_playlist_index = None  # to save last playlist position if finding format failed
             for ip, pref_format in enumerate(preferred_formats):
                 try:
